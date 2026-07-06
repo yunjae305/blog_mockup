@@ -79,7 +79,6 @@ const CUSTOM_PROMPT_KEY = "humanBlogStudio:customPrompt";
 const LOGIN_INFO_KEY = "humanBlogStudio:loginInfo";
 const DRAFTS_KEY = "humanBlogStudio:drafts";
 const LAST_DRAFT_KEY = "humanBlogStudio:lastDraft";
-const LOCAL_NAVER_AUTOMATION_URL = "http://127.0.0.1:29123/api/naver/post";
 const CUSTOM_PROMPT_SAMPLE = {
   name: "실무 경험이 풍부한 IT 전문가",
   description: "",
@@ -1624,32 +1623,6 @@ function getPostingTarget(platform) {
   };
 }
 
-async function requestNaverAutomation(postingMode, delayMinutes) {
-  const title = currentResult?.titles?.[0] || "";
-  const body = buildMarkdown(currentResult, currentContext);
-  const loginInfo = getLoginInfoForPlatform("네이버 블로그");
-  const response = await fetch(LOCAL_NAVER_AUTOMATION_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      id: loginInfo.id,
-      password: loginInfo.password,
-      title,
-      body,
-      postingMode,
-      delayMinutes,
-    }),
-  });
-
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok || result.ok === false) {
-    throw new Error(result.message || "로컬 Selenium 자동화를 시작하지 못했습니다.");
-  }
-  return result;
-}
-
 async function startPosting() {
   if (!currentResult || !currentContext) {
     if (postingStatus) postingStatus.textContent = "먼저 원고를 생성해주세요.";
@@ -1662,31 +1635,19 @@ async function startPosting() {
   const loginInfo = getLoginInfoForPlatform(currentContext.platform);
 
   if (currentContext.platform === "네이버 블로그") {
-    if (!loginInfo.id || !loginInfo.password || !loginInfo.loggedInAt) {
-      if (postingStatus) postingStatus.textContent = "네이버 계정 정보를 먼저 입력해주세요.";
-      openSettingsPanel("loginSettings");
-      return;
-    }
-
+    const postingWindow = window.open(target.url, "_blank");
+    postingWindow?.focus();
+    const popupBlocked = !postingWindow;
+    await copyText(buildMarkdown(currentResult, currentContext));
     startPostingButton.disabled = true;
-    if (postingStatus) postingStatus.textContent = "저장된 네이버 계정 정보로 글쓰기 화면을 엽니다.";
 
-    try {
-      const result = await requestNaverAutomation(postingMode, delayMinutes);
-      if (postingStatus) {
-        postingStatus.textContent =
-          postingMode === "예약 포스팅"
-            ? `네이버 글쓰기 화면에 원고 입력을 시작했습니다. ${delayMinutes}분 뒤 예약은 열린 화면에서 설정하세요.`
-            : result.message || "네이버 글쓰기 화면에 원고 입력을 시작했습니다.";
-      }
-    } catch (error) {
-      if (postingStatus) {
-        postingStatus.textContent =
-          "로컬 자동화 서버가 실행 중이 아닙니다. python automation\\local_posting_server.py를 먼저 실행해주세요.";
-      }
-    } finally {
-      startPostingButton.disabled = false;
+    if (postingStatus) {
+      postingStatus.textContent = popupBlocked
+        ? "목업: 팝업 차단을 해제하면 네이버 로그인 창이 열립니다."
+        : "목업: 네이버 로그인 창이 열렸습니다. 실제 구현에서는 저장된 계정으로 자동 로그인 후 글쓰기 화면으로 이동합니다.";
     }
+
+    startPostingButton.disabled = false;
     return;
   }
 
