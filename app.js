@@ -13,10 +13,10 @@ const referenceFileName = document.querySelector("#referenceFileName");
 const DEFAULT_FILE_LABEL = referenceFileName.textContent;
 const keywordCount = document.querySelector("#keywordCount");
 const keywordCountValue = document.querySelector("#keywordCountValue");
+const keywordCountCurrentValue = document.querySelector("#keywordCountCurrentValue");
 const humanLevel = document.querySelector("#humanLevel");
 const humanLevelValue = document.querySelector("#humanLevelValue");
 const trendMixRatio = document.querySelector("#trendMixRatio");
-const trendMixRatioValue = document.querySelector("#trendMixRatioValue");
 const generateButton = document.querySelector("#generatePost");
 const loadSampleButton = document.querySelector("#loadSample");
 const articleOutput = document.querySelector("#articleOutput");
@@ -55,7 +55,6 @@ const settingsViews = document.querySelectorAll(".settings-view");
 const customPromptName = document.querySelector("#customPromptName");
 const customPromptDescription = document.querySelector("#customPromptDescription");
 const customPromptInput = document.querySelector("#customPromptInput");
-const customPromptEnabled = document.querySelector("#customPromptEnabled");
 const customPromptCounter = document.querySelector("#customPromptCounter");
 const fillCustomPromptSampleButton = document.querySelector("#fillCustomPromptSample");
 const saveCustomPromptButton = document.querySelector("#saveCustomPrompt");
@@ -88,7 +87,7 @@ let generationCount = 0;
 let trendFeedIndex = 0;
 let editSaveTimer = null;
 let verificationResolve = null;
-const MAX_TREND_KEYWORDS = 2;
+const MAX_TREND_KEYWORDS = 1;
 const CUSTOM_PROMPT_KEY = "humanBlogStudio:customPrompt";
 const LOGIN_INFO_KEY = "humanBlogStudio:loginInfo";
 const DRAFTS_KEY = "humanBlogStudio:drafts";
@@ -213,9 +212,7 @@ mixModeChoices.forEach((choice) => {
   });
 });
 
-keywordCount.addEventListener("input", () => {
-  keywordCountValue.textContent = `${keywordCount.value}개`;
-});
+keywordCount.addEventListener("input", updateKeywordCountLabel);
 
 humanLevel.addEventListener("input", () => {
   humanLevelValue.textContent = humanLevel.value;
@@ -236,7 +233,7 @@ loadSampleButton.addEventListener("click", () => {
   humanLevel.value = 62;
   humanLevelValue.textContent = "62";
   keywordCount.value = 15;
-  keywordCountValue.textContent = "15개";
+  updateKeywordCountLabel();
   renderTopicIdeas(createTopicIdeas());
   activatePanel("topic");
 });
@@ -351,14 +348,9 @@ function loadCustomPrompt() {
   if (customPromptName) customPromptName.value = prompt.name || "";
   if (customPromptDescription) customPromptDescription.value = prompt.description || "";
   if (customPromptInput) customPromptInput.value = prompt.content || "";
-  if (customPromptEnabled) customPromptEnabled.checked = prompt.enabled !== false;
   updateCustomPromptCounter();
   if (customPromptStatus) {
-    customPromptStatus.textContent = prompt.content
-      ? prompt.enabled === false
-        ? "프롬프트 저장됨 · 비활성"
-        : "저장된 프롬프트 적용 중"
-      : "저장된 프롬프트 없음";
+    customPromptStatus.textContent = prompt.content ? "저장된 프롬프트 적용 중" : "저장된 프롬프트 없음";
   }
   updateVoicePromptStatus(prompt);
 }
@@ -370,7 +362,6 @@ function saveCustomPrompt() {
       name: customPromptName?.value.trim() || "",
       description: customPromptDescription?.value.trim() || "",
       content,
-      enabled: customPromptEnabled?.checked !== false,
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(CUSTOM_PROMPT_KEY, JSON.stringify(prompt));
@@ -379,7 +370,7 @@ function saveCustomPrompt() {
   } else {
     localStorage.removeItem(CUSTOM_PROMPT_KEY);
     if (customPromptStatus) customPromptStatus.textContent = "프롬프트 내용을 입력해주세요";
-    updateVoicePromptStatus({ content: "", enabled: true });
+    updateVoicePromptStatus({ content: "" });
   }
   updateCustomPromptCounter();
 }
@@ -388,25 +379,23 @@ function clearCustomPrompt() {
   if (customPromptName) customPromptName.value = "";
   if (customPromptDescription) customPromptDescription.value = "";
   if (customPromptInput) customPromptInput.value = "";
-  if (customPromptEnabled) customPromptEnabled.checked = true;
   localStorage.removeItem(CUSTOM_PROMPT_KEY);
   updateCustomPromptCounter();
   if (customPromptStatus) customPromptStatus.textContent = "저장된 프롬프트 없음";
-  updateVoicePromptStatus({ content: "", enabled: true });
+  updateVoicePromptStatus({ content: "" });
 }
 
 function fillCustomPromptSample() {
   if (customPromptName) customPromptName.value = CUSTOM_PROMPT_SAMPLE.name;
   if (customPromptDescription) customPromptDescription.value = CUSTOM_PROMPT_SAMPLE.description;
   if (customPromptInput) customPromptInput.value = CUSTOM_PROMPT_SAMPLE.content;
-  if (customPromptEnabled) customPromptEnabled.checked = true;
   updateCustomPromptCounter();
   if (customPromptStatus) customPromptStatus.textContent = "예시가 입력되었습니다";
 }
 
 function getCustomPromptConfig() {
   const raw = localStorage.getItem(CUSTOM_PROMPT_KEY);
-  if (!raw) return { name: "", description: "", content: "", enabled: true };
+  if (!raw) return { name: "", description: "", content: "" };
 
   try {
     const parsed = JSON.parse(raw);
@@ -415,19 +404,18 @@ function getCustomPromptConfig() {
         name: parsed.name || "",
         description: parsed.description || "",
         content: parsed.content || "",
-        enabled: parsed.enabled !== false,
       };
     }
   } catch {
-    return { name: "", description: "", content: raw, enabled: true };
+    return { name: "", description: "", content: raw };
   }
 
-  return { name: "", description: "", content: "", enabled: true };
+  return { name: "", description: "", content: "" };
 }
 
 function getActiveCustomPrompt() {
   const prompt = getCustomPromptConfig();
-  return prompt.enabled === false ? "" : prompt.content.trim();
+  return prompt.content.trim();
 }
 
 function getLoginInfo() {
@@ -528,9 +516,7 @@ function updateCustomPromptCounter() {
 function updateVoicePromptStatus(prompt = getCustomPromptConfig()) {
   const status = !prompt.content
     ? "설정한 프롬프트를 선택해서 적용합니다."
-    : prompt.enabled === false
-      ? "저장됨 · 비활성 상태입니다."
-      : "선택하면 저장한 말투로 원고를 생성합니다.";
+    : "선택하면 저장한 말투로 원고를 생성합니다.";
 
   if (customPromptPersonaTitle) customPromptPersonaTitle.textContent = "커스텀 프롬프트";
 
@@ -540,7 +526,7 @@ function updateVoicePromptStatus(prompt = getCustomPromptConfig()) {
     return;
   }
 
-  if (voicePromptStatus) voicePromptStatus.textContent = prompt.enabled === false ? "저장됨 · 비활성" : prompt.name || "저장된 프롬프트 적용 중";
+  if (voicePromptStatus) voicePromptStatus.textContent = prompt.name || "저장된 프롬프트 적용 중";
   if (customPromptPersonaStatus) customPromptPersonaStatus.textContent = status;
 }
 
@@ -701,11 +687,11 @@ function bindTrendChipEvents() {
   trendChips.forEach((chip) => {
     chip.addEventListener("click", () => {
       const isSelected = chip.getAttribute("aria-pressed") === "true";
-      const selectedCount = getSelectedTrendKeywords().length;
-      if (!isSelected && selectedCount >= MAX_TREND_KEYWORDS) {
-        if (trendStatusLabel) trendStatusLabel.textContent = `이벤트 키워드는 최대 ${MAX_TREND_KEYWORDS}개까지 선택할 수 있습니다`;
-        return;
+
+      if (!isSelected) {
+        trendChips.forEach((item) => item.setAttribute("aria-pressed", "false"));
       }
+
       chip.setAttribute("aria-pressed", String(!isSelected));
       if (trendStatusLabel) trendStatusLabel.textContent = "추천 트렌드 데이터 표시";
     });
@@ -779,12 +765,7 @@ function selectTrendKeywords(values) {
 }
 
 function selectTrendMixMode(value) {
-  const ratioMap = {
-    "자연스럽게 일부만 반영": 50,
-    "제목과 도입부에 반영": 70,
-    "본문 사례로만 사용": 30,
-  };
-  if (trendMixRatio) trendMixRatio.value = String(ratioMap[value] ?? 50);
+  if (trendMixRatio) trendMixRatio.value = "50";
   updateTrendMixRatioLabel();
   const radio = document.querySelector(`input[name="trendMixMode"][value="${value}"]`);
   if (!radio) return;
@@ -793,8 +774,13 @@ function selectTrendMixMode(value) {
 }
 
 function updateTrendMixRatioLabel() {
-  if (!trendMixRatio || !trendMixRatioValue) return;
-  trendMixRatioValue.textContent = `${trendMixRatio.value}%`;
+  if (trendMixRatio) trendMixRatio.value = "50";
+}
+
+function updateKeywordCountLabel() {
+  const label = `${keywordCount.value}개`;
+  if (keywordCountValue) keywordCountValue.textContent = label;
+  if (keywordCountCurrentValue) keywordCountCurrentValue.textContent = label;
 }
 
 function getTrendMixModeFromRatio(value) {
@@ -919,18 +905,18 @@ function createTopicIdeas() {
 }
 
 function renderTopicIdeas(ideas) {
+  const visibleIdeas = ideas.slice(0, 4);
   topicResults.classList.remove("empty");
   topicResults.innerHTML = `
     <div class="topic-choice-list">
-      ${ideas
+      ${visibleIdeas
         .map((idea, index) => {
           const title = typeof idea === "string" ? idea : idea.title;
-          const score = typeof idea === "object" && idea.score ? idea.score : [98, 94, 91][index];
           return `
-            <label class="topic-choice ${index === 0 ? "selected" : ""}" data-hot="${index < 3 ? "true" : "false"}">
+            <label class="topic-choice ${index === 0 ? "selected" : ""}" data-hot="${index === 0 ? "true" : "false"}">
               <input name="topicIdea" type="radio" value="${escapeHtml(title)}" ${index === 0 ? "checked" : ""} />
               <span class="topic-title">${escapeHtml(title)}</span>
-              ${index < 3 ? `<strong class="topic-score">추천 ${score}점</strong>` : ""}
+              ${index === 0 ? `<strong class="topic-recommend-badge">추천</strong>` : ""}
             </label>
           `;
         })
@@ -951,7 +937,7 @@ function renderTopicIdeas(ideas) {
 }
 
 function setSummary(data) {
-  summary.textContent = `${data.serviceName} · ${data.goalLabel} · ${data.platform} · ${data.persona} · 키워드 ${data.trendMixRatio}%${
+  summary.textContent = `${data.serviceName} · ${data.goalLabel} · ${data.platform} · ${data.persona} · 기본 5:5${
     data.selectedTopicTitle ? ` · ${data.selectedTopicTitle}` : ""
   }`;
 }
@@ -982,7 +968,7 @@ function createVerificationReport(data) {
     { label: "글 목적", value: data.goalLabel },
     { label: "선택 제목", value: data.selectedTopicTitle || "직접 선택 전" },
     { label: "선택 키워드", value: data.trendKeywords.length ? data.trendKeywords.join(", ") : "선택 없음" },
-    { label: "결합 비율", value: `주제 ${100 - data.trendMixRatio}% · 키워드 ${data.trendMixRatio}%` },
+    { label: "결합 비율", value: "주제와 키워드가 5:5로 조합됩니다." },
     { label: "참고 URL", value: data.referenceUrl || "없음" },
     { label: "참고 파일", value: data.referenceFileName || "없음" },
     { label: "추가 자료", value: data.referenceMemo || "없음" },
@@ -2129,4 +2115,5 @@ loadCustomPrompt();
 loadLoginInfo();
 updateScheduleDelayVisibility();
 updateTrendMixRatioLabel();
+updateKeywordCountLabel();
 window.setInterval(() => loadTrendFeed({ force: true }), 60 * 60 * 1000);
