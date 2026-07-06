@@ -740,25 +740,25 @@ function createTopicIdeas() {
 
   if (!trends.length) {
     return [
-      { title: `${serviceName}로 이미지 생성 기능 사용해보면서 느낀 점` },
-      { title: `${serviceName}, 처음 보는 사람도 바로 이해하게 정리해봤습니다` },
-      { title: `블로그 쓰기 전부터 막힌다면 ${serviceName}를 써볼 만한 이유` },
-      { title: `${serviceName} 사용 후기처럼 자연스럽게 풀어본 핵심 기능` },
-      { title: `빈 화면 앞에서 멈췄을 때 ${serviceName}가 먼저 해주는 일` },
-      { title: `${serviceName}, 이런 사람이라면 한 번쯤 써봐도 좋겠습니다` },
+      { title: `${serviceName} 안 써본 사람만 모르는 블로그 제목 뽑는 법` },
+      { title: `원고 쓰기 전에 ${serviceName}부터 켰더니 제목이 달라졌습니다` },
+      { title: `${serviceName} 처음 쓰고 놀란 이유, 글감 막힌 사람은 꼭 보세요` },
+      { title: `블로그 조회수 답답하다면 ${serviceName}로 먼저 바꿔야 할 것` },
+      { title: `빈 화면 앞에서 30분 버리는 사람들, ${serviceName}로 이렇게 시작합니다` },
+      { title: `${serviceName} 모르면 손해 보는 글쓰기 루틴 5가지` },
     ];
   }
 
   if (trends.includes("여름 다이어트")) {
     return [
-      { title: `${serviceName} 채팅 기능에 여름 다이어트 방법을 물어봤습니다` },
-      { title: `${serviceName}가 짜준 다이어트 계획, 일주일 따라 해본 후기` },
-      { title: `여름 다이어트 시작 전 ${serviceName}에게 먼저 물어본 것들` },
-      { title: `${serviceName}로 식단과 운동 루틴 잡아보니 생각보다 현실적이었습니다` },
-      { title: `혼자 다이어트 계획 세우기 막막해서 ${serviceName} 채팅을 써봤습니다` },
-      { title: `${serviceName}가 알려준 대로 여름 다이어트 해보니 달라진 점` },
-      { title: `여름 다이어트 실패하기 싫어서 ${serviceName}에게 루틴을 맡겨봤습니다` },
-      { title: `운동 초보가 ${serviceName} 채팅으로 다이어트 계획 세운 후기` },
+      { title: `여름 다이어트 또 망하기 싫어서 ${serviceName}에게 식단을 맡겨봤습니다` },
+      { title: `${serviceName}가 짜준 여름 다이어트 루틴, 생각보다 무섭게 현실적입니다` },
+      { title: `여름 다이어트 시작 전 이 질문 안 하면 또 실패합니다` },
+      { title: `${serviceName}로 식단과 운동 루틴 잡았더니 포기 포인트가 보였습니다` },
+      { title: `혼자 다이어트 계획 세우다 망한 사람, ${serviceName} 채팅부터 보세요` },
+      { title: `${serviceName}가 알려준 대로 해보니 여름 다이어트가 달라진 이유` },
+      { title: `여름 다이어트 실패하는 사람들, 루틴보다 먼저 바꿔야 할 것` },
+      { title: `운동 초보가 ${serviceName}로 다이어트 계획 짜고 놀란 포인트` },
     ];
   }
 
@@ -766,15 +766,15 @@ function createTopicIdeas() {
   const secondTrend = trends[1] || trends[0];
   const combinedTrendTitle =
     trends.length > 1
-      ? `${trendText}부터 ${secondTrend}까지, 요즘 키워드로 글감 만드는 법`
-      : `${trendText} 하나로도 블로그 글감 만드는 법`;
+      ? `${trendText}부터 ${secondTrend}까지, 지금 안 잡으면 늦는 글감`
+      : `${trendText} 하나로 조회수 노리는 블로그 글감 만드는 법`;
 
   return [
-    { title: `${trendText} 글감 막혔다면, ${serviceName}로 먼저 잡아볼 것들` },
-    { title: `블로그 쓰기 전부터 지친다면 ${serviceName}를 써볼 만한 이유` },
-    { title: `${secondTrend} 글도 이렇게 시작하면 덜 막힙니다` },
-    { title: `빈 화면 앞에서 멈췄을 때 ${serviceName}가 먼저 해주는 일` },
-    { title: `${serviceName}, 이런 사람이라면 한 번쯤 써봐도 좋겠습니다` },
+    { title: `${trendText} 검색하는 사람들, 지금 ${serviceName}를 봐야 하는 이유` },
+    { title: `${trendText} 뜨는데 블로그 글 못 쓰고 있다면 이건 꼭 보세요` },
+    { title: `${secondTrend} 글감, 이렇게 시작하면 클릭이 확 달라집니다` },
+    { title: `${trendText} 놓치면 아까운 타이밍, ${serviceName}로 바로 잡는 법` },
+    { title: `${serviceName} 모르면 ${trendText} 트래픽을 그냥 흘려보낼 수 있습니다` },
     { title: combinedTrendTitle },
   ];
 }
@@ -859,34 +859,35 @@ function getPrimaryTrend(data) {
 function createClickTitle(data) {
   const trend = getPrimaryTrend(data);
   const service = data.serviceName;
+  const trendBundle = data.trendKeywords.length > 1 ? data.trendKeywords.slice(0, 2).join("·") : trend;
   const titleBank = {
     "일상 블로거": [
-      `${trend} 검색하다가 발견한 ${service}, 안 봤으면 진짜 손해였어요`,
+      `${trend} 검색하다 멈칫했습니다. ${service} 안 봤으면 진짜 손해였어요`,
       `${service} 처음 써보고 당황했습니다. 왜 다들 이걸 숨겼죠?`,
-      `${trend} 시즌에 블로그 쓰는 분들, 이거 모르면 시간만 날립니다`,
-      `솔직히 ${service}, 기대 안 했는데 하루 만에 생각이 바뀌었습니다`,
-      `${trend} 뜰 때 ${service} 안 쓰면 놓치는 게 너무 많습니다`,
+      `${trend} 뜨는 지금, 블로그 쓰는 사람은 이걸 놓치면 아깝습니다`,
+      `솔직히 ${service} 별 기대 없었는데 하루 만에 생각이 바뀌었습니다`,
+      `${trendBundle} 잡으려면 ${service}부터 봐야 하는 이유`,
     ],
     "IT 전문 리뷰어": [
       `${service} 직접 써보고 갈렸습니다. 추천할 사람과 말릴 사람`,
-      `${trend} 콘텐츠 만들 때 ${service}, 진짜 돈값 하는지 확인했습니다`,
-      `${service} 장점만 말하지 않겠습니다. 써보고 불편했던 점까지 공개`,
+      `${trend} 콘텐츠 만들 때 ${service}, 진짜 쓸 만한지 끝까지 확인했습니다`,
+      `${service} 장점만 말하지 않겠습니다. 써보고 아쉬운 점까지 공개`,
       `${service} 후기 총정리, 시간 버리기 싫은 사람만 보세요`,
       `${service} 써보기 전 꼭 보세요. 모르면 후회할 포인트 5가지`,
     ],
     "경제 분석가": [
-      `${trend} 검색량이 몰릴 때 ${service}가 먹히는 진짜 이유`,
+      `${trend} 검색량 몰릴 때 ${service}를 쓰는 사람이 먼저 가져가는 것`,
       `${service}를 블로그 제작에 붙이면 결과가 달라지는 3가지`,
       `${trend} 이슈를 콘텐츠로 바꾸는 사람들은 이미 이렇게 씁니다`,
       `${service} 도입 전 모르면 손해 보는 핵심 기준`,
-      `${trend} 트래픽을 놓치지 않으려면 지금 봐야 할 ${service} 활용법`,
+      `${trend} 트래픽 놓치기 싫다면 지금 봐야 할 ${service} 활용법`,
     ],
     "교육 컨설턴트": [
       `${service} 처음이면 이것부터 보세요. 어렵게 시작하면 손해입니다`,
-      `${trend} 글감으로 블로그 쓰는 법, 이 순서만 따라 하면 됩니다`,
+      `${trend} 글감으로 블로그 써야 한다면 이 순서가 제일 빠릅니다`,
       `${service} 사용법 쉽게 정리, 처음 쓰는 사람도 바로 따라합니다`,
-      `블로그 글 막힐 때 ${service}로 10분 안에 시작하는 방법`,
-      `${trend} 때문에 글 써야 한다면, ${service}로 이렇게 시작하세요`,
+      `블로그 글 막힐 때 ${service}로 10분 안에 제목 뽑는 방법`,
+      `${trend} 때문에 급하게 글 써야 한다면 ${service}로 이렇게 시작하세요`,
     ],
   };
 
@@ -1216,7 +1217,7 @@ function createBlogImages(data, profile) {
 }
 
 function isDietRoutineTopic(data) {
-  return data.selectedTopicTitle === `${data.serviceName}로 식단과 운동 루틴 잡아보니 생각보다 현실적이었습니다`;
+  return data.selectedTopicTitle === `${data.serviceName}로 식단과 운동 루틴 잡았더니 포기 포인트가 보였습니다`;
 }
 
 function isAionaSampleData(data) {
@@ -1224,7 +1225,7 @@ function isAionaSampleData(data) {
 }
 
 function createAionaSamplePayload(data, profile) {
-  const title = "AIONA 이미지 생성 기능 직접 써본 후기";
+  const title = data.selectedTopicTitle || "AIONA 이미지 생성, 안 써본 사람만 모르는 블로그 썸네일 치트키";
   const tags = [
     "#AIONA",
     "#AIONA사용후기",
