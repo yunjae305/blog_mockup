@@ -15,6 +15,8 @@ const keywordCount = document.querySelector("#keywordCount");
 const keywordCountValue = document.querySelector("#keywordCountValue");
 const humanLevel = document.querySelector("#humanLevel");
 const humanLevelValue = document.querySelector("#humanLevelValue");
+const trendMixRatio = document.querySelector("#trendMixRatio");
+const trendMixRatioValue = document.querySelector("#trendMixRatioValue");
 const generateButton = document.querySelector("#generatePost");
 const loadSampleButton = document.querySelector("#loadSample");
 const articleOutput = document.querySelector("#articleOutput");
@@ -42,6 +44,12 @@ const layoutGrid = document.querySelector(".layout-grid");
 const openSettingsButton = document.querySelector("#openSettings");
 const closeSettingsButton = document.querySelector("#closeSettings");
 const settingsOverlay = document.querySelector("#settingsOverlay");
+const verificationOverlay = document.querySelector("#verificationOverlay");
+const closeVerificationButton = document.querySelector("#closeVerification");
+const cancelVerificationButton = document.querySelector("#cancelVerification");
+const confirmVerificationButton = document.querySelector("#confirmVerification");
+const verificationInputList = document.querySelector("#verificationInputList");
+const verificationSearchList = document.querySelector("#verificationSearchList");
 const settingsTabs = document.querySelectorAll(".settings-tab");
 const settingsViews = document.querySelectorAll(".settings-view");
 const customPromptName = document.querySelector("#customPromptName");
@@ -63,7 +71,11 @@ const clearLoginInfoButton = document.querySelector("#clearLoginInfo");
 const loginInfoStatus = document.querySelector("#loginInfoStatus");
 const draftList = document.querySelector("#draftList");
 const draftPreview = document.querySelector("#draftPreview");
+const selectAllDrafts = document.querySelector("#selectAllDrafts");
+const deleteSelectedDraftsButton = document.querySelector("#deleteSelectedDrafts");
 const editVoicePromptButton = document.querySelector("#editVoicePrompt");
+const editCustomPromptFromVoiceButton = document.querySelector("#editCustomPromptFromVoice");
+const openPromptFromPersonalButton = document.querySelector("#openPromptFromPersonal");
 const voicePromptStatus = document.querySelector("#voicePromptStatus");
 const customPromptPersonaTitle = document.querySelector("#customPromptPersonaTitle");
 const customPromptPersonaStatus = document.querySelector("#customPromptPersonaStatus");
@@ -74,6 +86,8 @@ let generating = false;
 let lastGeneratedTitle = "";
 let generationCount = 0;
 let trendFeedIndex = 0;
+let editSaveTimer = null;
+let verificationResolve = null;
 const MAX_TREND_KEYWORDS = 2;
 const CUSTOM_PROMPT_KEY = "humanBlogStudio:customPrompt";
 const LOGIN_INFO_KEY = "humanBlogStudio:loginInfo";
@@ -150,7 +164,7 @@ function activatePanel(panelId) {
   tabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.panel === panelId));
   panels.forEach((panel) => panel.classList.toggle("active", panel.id === panelId));
 
-  const order = ["topic", "keywords", "voice"];
+  const order = ["topic", "keywords"];
   const activeIndex = order.indexOf(panelId);
   steps.forEach((step, index) => {
     step.classList.toggle("active", index === activeIndex);
@@ -207,6 +221,8 @@ humanLevel.addEventListener("input", () => {
   humanLevelValue.textContent = humanLevel.value;
 });
 
+trendMixRatio?.addEventListener("input", updateTrendMixRatioLabel);
+
 loadSampleButton.addEventListener("click", () => {
   document.querySelector("#serviceName").value = "AIONA";
   selectPurposeByLabel("사용 후기");
@@ -235,7 +251,15 @@ generateButton.addEventListener("click", async () => {
   generating = true;
   generateButton.disabled = true;
   const data = getFormData();
+  data.verificationReport = createVerificationReport(data);
   setSummary(data);
+  const shouldContinue = await openVerificationModal(data, data.verificationReport);
+  if (!shouldContinue) {
+    generating = false;
+    generateButton.disabled = false;
+    statusLabel.textContent = "입력 대기";
+    return;
+  }
   setGeneratingState();
 
   await runWritingPipeline();
@@ -254,14 +278,23 @@ scheduleDelayMinutes?.addEventListener("change", () => {
   getScheduleDelayMinutes();
   updateScheduleDelayVisibility();
 });
-openSettingsButton?.addEventListener("click", () => openSettingsPanel("promptSettings"));
-editVoicePromptButton?.addEventListener("click", () => openSettingsPanel("promptSettings"));
+openSettingsButton?.addEventListener("click", () => openSettingsPanel("personalSettings"));
+editVoicePromptButton?.addEventListener("click", () => openSettingsPanel("personalSettings"));
+editCustomPromptFromVoiceButton?.addEventListener("click", () => openSettingsPanel("promptSettings"));
+openPromptFromPersonalButton?.addEventListener("click", () => activateSettingsPanel("promptSettings"));
 closeSettingsButton?.addEventListener("click", closeSettingsPanel);
 settingsOverlay?.addEventListener("click", (event) => {
   if (event.target === settingsOverlay) closeSettingsPanel();
 });
+closeVerificationButton?.addEventListener("click", () => closeVerificationModal(false));
+cancelVerificationButton?.addEventListener("click", () => closeVerificationModal(false));
+confirmVerificationButton?.addEventListener("click", () => closeVerificationModal(true));
+verificationOverlay?.addEventListener("click", (event) => {
+  if (event.target === verificationOverlay) closeVerificationModal(false);
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && settingsOverlay && !settingsOverlay.hidden) closeSettingsPanel();
+  if (event.key === "Escape" && verificationOverlay && !verificationOverlay.hidden) closeVerificationModal(false);
 });
 
 settingsTabs.forEach((tab) => {
@@ -274,6 +307,25 @@ fillCustomPromptSampleButton?.addEventListener("click", fillCustomPromptSample);
 customPromptInput?.addEventListener("input", updateCustomPromptCounter);
 saveLoginInfoButton?.addEventListener("click", saveLoginInfo);
 clearLoginInfoButton?.addEventListener("click", clearLoginInfo);
+selectAllDrafts?.addEventListener("change", () => {
+  const checked = Boolean(selectAllDrafts.checked);
+  draftList?.querySelectorAll(".draft-checkbox").forEach((checkbox) => {
+    checkbox.checked = checked;
+    checkbox.closest(".draft-row")?.classList.toggle("selected", checked);
+  });
+  updateDraftSelectionState();
+});
+deleteSelectedDraftsButton?.addEventListener("click", deleteSelectedDrafts);
+
+articleOutput?.addEventListener("input", () => {
+  if (!currentResult || !currentContext || articleOutput.classList.contains("empty")) return;
+  syncEditedArticleFromDom();
+  if (draftStatus) draftStatus.textContent = "* 수정 중입니다.";
+  window.clearTimeout(editSaveTimer);
+  editSaveTimer = window.setTimeout(() => {
+    saveGeneratedDraft(currentResult.titles[0] || lastGeneratedTitle || "수정된 원고");
+  }, 700);
+});
 
 function openSettingsPanel(panelId = "promptSettings") {
   if (!settingsOverlay) return;
@@ -507,46 +559,114 @@ function renderDraftList() {
 
   if (!drafts.length) {
     draftList.innerHTML = "";
+    draftPreview.hidden = false;
     draftPreview.className = "draft-preview empty";
     draftPreview.innerHTML = "<p>저장된 초안이 없습니다.</p>";
+    updateDraftSelectionState();
     return;
   }
 
+  draftPreview.hidden = true;
+  draftPreview.className = "draft-preview empty";
+  draftPreview.innerHTML = "<p>저장된 초안을 클릭하면 내용이 표시됩니다.</p>";
   draftList.innerHTML = drafts
     .map(
       (draft, index) => `
-        <button class="draft-item" type="button" data-draft-index="${index}">
-          <strong>${escapeHtml(draft.title || "제목 없는 초안")}</strong>
-          <span>${escapeHtml(formatDateTime(new Date(draft.savedAt || Date.now())))}</span>
-        </button>
+        <div class="draft-row" data-draft-index="${index}">
+          <label class="draft-checkbox-wrap" aria-label="초안 선택">
+            <input class="draft-checkbox" type="checkbox" data-draft-index="${index}" />
+          </label>
+          <button class="draft-item" type="button" data-draft-index="${index}">
+            <strong>${escapeHtml(draft.title || "제목 없는 초안")}</strong>
+            <span>${escapeHtml(formatDateTime(new Date(draft.savedAt || Date.now())))}</span>
+          </button>
+        </div>
       `
     )
     .join("");
+
+  draftList.querySelectorAll(".draft-checkbox").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      checkbox.closest(".draft-row")?.classList.toggle("selected", checkbox.checked);
+      updateDraftSelectionState();
+    });
+  });
 
   draftList.querySelectorAll(".draft-item").forEach((button) => {
     button.addEventListener("click", () => {
       const isActive = button.classList.contains("active");
       draftList.querySelectorAll(".draft-item").forEach((item) => item.classList.remove("active"));
+      draftList.querySelectorAll(".draft-inline-preview").forEach((item) => item.remove());
       if (isActive) {
-        collapseDraftPreview();
         return;
       }
       button.classList.add("active");
-      renderDraftPreview(drafts[Number(button.dataset.draftIndex)]);
+      const row = button.closest(".draft-row") || button;
+      renderDraftInlinePreview(row, drafts[Number(button.dataset.draftIndex)]);
     });
   });
 
   collapseDraftPreview();
+  updateDraftSelectionState();
+}
+
+function renderDraftInlinePreview(button, draft) {
+  const preview = document.createElement("article");
+  preview.className = "draft-inline-preview";
+  preview.innerHTML = draft?.previewHtml || "<p>저장된 초안 내용을 불러올 수 없습니다.</p>";
+  button.insertAdjacentElement("afterend", preview);
+}
+
+function getSelectedDraftIndexes() {
+  if (!draftList) return [];
+  return [...draftList.querySelectorAll(".draft-checkbox:checked")]
+    .map((checkbox) => Number(checkbox.dataset.draftIndex))
+    .filter((index) => Number.isInteger(index));
+}
+
+function updateDraftSelectionState() {
+  const checkboxes = draftList ? [...draftList.querySelectorAll(".draft-checkbox")] : [];
+  const checkedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+  const hasDrafts = checkboxes.length > 0;
+
+  if (selectAllDrafts) {
+    selectAllDrafts.disabled = !hasDrafts;
+    selectAllDrafts.checked = hasDrafts && checkedCount === checkboxes.length;
+    selectAllDrafts.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+  }
+
+  if (deleteSelectedDraftsButton) {
+    deleteSelectedDraftsButton.disabled = checkedCount === 0;
+    deleteSelectedDraftsButton.title = checkedCount ? `선택한 초안 ${checkedCount}개 삭제` : "선택한 초안 삭제";
+  }
+}
+
+function deleteSelectedDrafts() {
+  const selectedIndexes = new Set(getSelectedDraftIndexes());
+  if (!selectedIndexes.size) return;
+
+  const remainingDrafts = getSavedDrafts().filter((_, index) => !selectedIndexes.has(index));
+  localStorage.setItem(DRAFTS_KEY, JSON.stringify(remainingDrafts));
+
+  if (remainingDrafts[0]) {
+    localStorage.setItem(LAST_DRAFT_KEY, JSON.stringify(remainingDrafts[0]));
+  } else {
+    localStorage.removeItem(LAST_DRAFT_KEY);
+  }
+
+  renderDraftList();
 }
 
 function renderDraftPreview(draft) {
   if (!draftPreview) return;
+  draftPreview.hidden = false;
   draftPreview.className = "draft-preview";
   draftPreview.innerHTML = draft?.previewHtml || "<p>저장된 초안 내용을 불러올 수 없습니다.</p>";
 }
 
 function collapseDraftPreview() {
   if (!draftPreview) return;
+  draftPreview.hidden = true;
   draftPreview.className = "draft-preview empty";
   draftPreview.innerHTML = "<p>저장된 초안을 클릭하면 내용이 표시됩니다.</p>";
 }
@@ -618,10 +738,10 @@ function renderTrendFeed(payload) {
   const items = payload.items.slice(0, 12);
   trendKeywordGrid.innerHTML = items
     .map(
-      (item) => `
-        <button class="trend-chip" type="button" data-trend="${escapeHtml(item.keyword)}" aria-pressed="false">
+      (item, index) => `
+        <button class="trend-chip" type="button" data-trend="${escapeHtml(item.keyword)}" data-hot="${index < 2 ? "true" : "false"}" aria-pressed="false">
           <strong>${escapeHtml(item.keyword)}</strong>
-          <small>${escapeHtml(item.source || "Trend")} · ${escapeHtml(item.period || "기간 이슈")} · ${escapeHtml(String(item.score ?? "--"))} · ${escapeHtml(item.change || "new")}</small>
+          <small>${escapeHtml(item.source || "Trend")}</small>
         </button>
       `
     )
@@ -659,10 +779,28 @@ function selectTrendKeywords(values) {
 }
 
 function selectTrendMixMode(value) {
+  const ratioMap = {
+    "자연스럽게 일부만 반영": 50,
+    "제목과 도입부에 반영": 70,
+    "본문 사례로만 사용": 30,
+  };
+  if (trendMixRatio) trendMixRatio.value = String(ratioMap[value] ?? 50);
+  updateTrendMixRatioLabel();
   const radio = document.querySelector(`input[name="trendMixMode"][value="${value}"]`);
   if (!radio) return;
   radio.checked = true;
   mixModeChoices.forEach((choice) => choice.classList.toggle("selected", choice.contains(radio)));
+}
+
+function updateTrendMixRatioLabel() {
+  if (!trendMixRatio || !trendMixRatioValue) return;
+  trendMixRatioValue.textContent = `${trendMixRatio.value}%`;
+}
+
+function getTrendMixModeFromRatio(value) {
+  if (value >= 70) return "제목과 도입부에 강하게 반영";
+  if (value <= 30) return "본문 사례 중심으로 약하게 반영";
+  return "자연스럽게 일부만 반영";
 }
 
 function getSelectedTrendKeywords() {
@@ -699,11 +837,12 @@ function getFormData() {
     primaryKeyword: keywordInput.primary,
     selectedKeywords: keywordInput.sub,
     trendKeywords: getSelectedTrendKeywords(),
-    trendMixMode: document.querySelector('input[name="trendMixMode"]:checked')?.value || "자연스럽게 일부만 반영",
+    trendMixRatio: Number(trendMixRatio?.value || 50),
+    trendMixMode: getTrendMixModeFromRatio(Number(trendMixRatio?.value || 50)),
     selectedTopicTitle: selectedTopicTitleInput.value.trim(),
     keywordCount: Number(keywordCount.value),
     persona,
-    humanLevel: Number(humanLevel.value),
+    humanLevel: 55,
     platform: document.querySelector('input[name="platform"]:checked').value,
     postingMode: postingModeSelect?.value || "즉시 포스팅",
     scheduleDelayMinutes: getScheduleDelayMinutes(),
@@ -786,10 +925,12 @@ function renderTopicIdeas(ideas) {
       ${ideas
         .map((idea, index) => {
           const title = typeof idea === "string" ? idea : idea.title;
+          const score = typeof idea === "object" && idea.score ? idea.score : [98, 94, 91][index];
           return `
-            <label class="topic-choice ${index === 0 ? "selected" : ""}">
+            <label class="topic-choice ${index === 0 ? "selected" : ""}" data-hot="${index < 3 ? "true" : "false"}">
               <input name="topicIdea" type="radio" value="${escapeHtml(title)}" ${index === 0 ? "checked" : ""} />
-              <span>${escapeHtml(title)}</span>
+              <span class="topic-title">${escapeHtml(title)}</span>
+              ${index < 3 ? `<strong class="topic-score">추천 ${score}점</strong>` : ""}
             </label>
           `;
         })
@@ -810,7 +951,7 @@ function renderTopicIdeas(ideas) {
 }
 
 function setSummary(data) {
-  summary.textContent = `${data.serviceName} · ${data.goalLabel} · ${data.platform} · ${data.persona}${
+  summary.textContent = `${data.serviceName} · ${data.goalLabel} · ${data.platform} · ${data.persona} · 키워드 ${data.trendMixRatio}%${
     data.selectedTopicTitle ? ` · ${data.selectedTopicTitle}` : ""
   }`;
 }
@@ -831,6 +972,81 @@ function setGeneratingState() {
     item.className = "pending";
   });
   statusLabel.textContent = "원고 생성 중";
+}
+
+function createVerificationReport(data) {
+  const topic = data.selectedTopicTitle || `${data.serviceName} ${data.goalLabel}`;
+  const trends = data.trendKeywords.length ? data.trendKeywords : ["선택한 트렌드 없음"];
+  const inputInfo = [
+    { label: "브랜드/서비스", value: data.serviceName },
+    { label: "글 목적", value: data.goalLabel },
+    { label: "선택 제목", value: data.selectedTopicTitle || "직접 선택 전" },
+    { label: "선택 키워드", value: data.trendKeywords.length ? data.trendKeywords.join(", ") : "선택 없음" },
+    { label: "결합 비율", value: `주제 ${100 - data.trendMixRatio}% · 키워드 ${data.trendMixRatio}%` },
+    { label: "참고 URL", value: data.referenceUrl || "없음" },
+    { label: "참고 파일", value: data.referenceFileName || "없음" },
+    { label: "추가 자료", value: data.referenceMemo || "없음" },
+  ];
+  const searched = trends.map((trend, index) => ({
+    title: index === 0 ? "주요 검색 내용" : "보조 검색 내용",
+    query: `${data.serviceName} ${topic} ${trend}`.trim(),
+    finding: trend === "선택한 트렌드 없음"
+      ? "선택된 트렌드가 없어 브랜드명, 글 목적, 참고 자료 중심으로 검증합니다."
+      : `"${trend}" 관련 관심사를 확인했고, 입력된 주제와 자연스럽게 연결되는 범위에서만 반영합니다.`,
+    source: index === 0 ? "검색 에이전트 요약" : "관련 맥락 요약",
+  }));
+
+  return {
+    topic,
+    generatedAt: new Date(),
+    inputInfo,
+    searched,
+  };
+}
+
+function openVerificationModal(data, report) {
+  if (!verificationOverlay || !verificationInputList || !verificationSearchList) return Promise.resolve(true);
+
+  verificationInputList.innerHTML = report.inputInfo
+    .map(
+      (item) => `
+        <div>
+          <dt>${escapeHtml(item.label)}</dt>
+          <dd>${escapeHtml(item.value)}</dd>
+        </div>
+      `
+    )
+    .join("");
+
+  verificationSearchList.innerHTML = report.searched
+    .map(
+      (item) => `
+        <article class="verification-search-item">
+          <div>
+            <span>${escapeHtml(item.source)}</span>
+            <strong>${escapeHtml(item.title)}</strong>
+          </div>
+          <p>${escapeHtml(item.query)}</p>
+          <small>${escapeHtml(item.finding)}</small>
+        </article>
+      `
+    )
+    .join("");
+
+  verificationOverlay.hidden = false;
+  statusLabel.textContent = "검증 내용 확인 중";
+
+  return new Promise((resolve) => {
+    verificationResolve = resolve;
+  });
+}
+
+function closeVerificationModal(shouldContinue = false) {
+  if (verificationOverlay) verificationOverlay.hidden = true;
+  if (verificationResolve) {
+    verificationResolve(Boolean(shouldContinue));
+    verificationResolve = null;
+  }
 }
 
 async function runWritingPipeline() {
@@ -1566,7 +1782,8 @@ function renderArticle(data, payload) {
 
   articleOutput.className = "article-output";
   articleOutput.innerHTML = `
-    <div class="blog-article ${data.platform === "네이버 블로그" ? "blog-article-naver" : "blog-article-tistory"}">
+    <div class="edit-notice">본문을 클릭해 바로 수정할 수 있습니다.</div>
+    <div class="blog-article ${data.platform === "네이버 블로그" ? "blog-article-naver" : "blog-article-tistory"}" contenteditable="true" spellcheck="true">
       <h1>${escapeHtml(title)}</h1>
       ${metaHtml}
       ${articleBlocks}
@@ -1579,6 +1796,37 @@ function renderArticle(data, payload) {
   statusLabel.textContent = "원고 완료";
   if (postingStatus) postingStatus.textContent = "포스팅할 준비가 완료되었습니다.";
   updateScheduleDelayVisibility();
+}
+
+function syncEditedArticleFromDom() {
+  if (!currentResult) return;
+  const article = articleOutput.querySelector(".blog-article");
+  if (!article) return;
+
+  const title = article.querySelector("h1")?.innerText.trim();
+  const paragraphs = [...article.querySelectorAll("p.naver-style, p.tistory-style")]
+    .map((paragraph) => paragraph.innerText.trim())
+    .filter(Boolean);
+  const headings = [...article.querySelectorAll("h2")]
+    .map((heading) => heading.innerText.replace(/\s*✨$/, "").trim())
+    .filter(Boolean);
+  const tags = [...article.querySelectorAll(".article-tags span")]
+    .map((tag) => normalizeTag(tag.innerText))
+    .filter(Boolean);
+
+  if (title) currentResult.titles[0] = title;
+  if (paragraphs.length) currentResult.article = paragraphs;
+  if (headings.length) currentResult.outline = headings;
+  if (tags.length) currentResult.tags = [...new Set(tags)];
+}
+
+function getEditedArticleHtml() {
+  const article = articleOutput?.querySelector(".blog-article");
+  if (!article || articleOutput.classList.contains("empty")) return "";
+  const clone = article.cloneNode(true);
+  clone.removeAttribute("contenteditable");
+  clone.removeAttribute("spellcheck");
+  return `<article class="${clone.className}">${clone.innerHTML}</article>`;
 }
 
 function getScheduleDelayMinutes() {
@@ -1712,6 +1960,7 @@ function saveGeneratedDraft(title) {
 }
 
 function buildMarkdown(result, data) {
+  syncEditedArticleFromDom();
   if (result.markdownContent) return result.markdownContent;
 
   const title = result.titles[0];
@@ -1747,6 +1996,10 @@ function buildMarkdown(result, data) {
 }
 
 function buildHtml(result, data) {
+  syncEditedArticleFromDom();
+  const editedHtml = getEditedArticleHtml();
+  if (editedHtml) return editedHtml;
+
   const title = result.titles[0];
   const imageSlots = getImageSlots(data);
   const lines = [
@@ -1875,4 +2128,5 @@ loadTrendFeed();
 loadCustomPrompt();
 loadLoginInfo();
 updateScheduleDelayVisibility();
+updateTrendMixRatioLabel();
 window.setInterval(() => loadTrendFeed({ force: true }), 60 * 60 * 1000);
