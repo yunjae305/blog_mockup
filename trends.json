@@ -1,0 +1,20 @@
+{
+  "updatedAt": "2026-07-04T09:00:00+09:00",
+  "refreshIntervalHours": 1,
+  "status": "demo",
+  "sources": [
+    "네이버 검색량 후보군",
+    "공연/축제 일정",
+    "유튜브/인스타 반응"
+  ],
+  "items": [
+    { "keyword": "월드컵 16강", "source": "Naver", "period": "7월 4-7일", "score": 98, "change": "+24%" },
+    { "keyword": "월드컵 중계", "source": "YouTube", "period": "월드컵 기간", "score": 95, "change": "+21%" },
+    { "keyword": "월드컵 응원", "source": "Instagram", "period": "경기 당일", "score": 91, "change": "+18%" },
+    { "keyword": "흠뻑쇼 준비물", "source": "Instagram", "period": "여름 공연 시즌", "score": 88, "change": "+16%" },
+    { "keyword": "흠뻑쇼 코디", "source": "Instagram", "period": "공연 전후", "score": 84, "change": "+13%" },
+    { "keyword": "워터밤 일정", "source": "Naver", "period": "여름 페스티벌", "score": 81, "change": "+10%" },
+    { "keyword": "장마철 데이트", "source": "Naver", "period": "7월 장마", "score": 77, "change": "+8%" },
+    { "keyword": "여름휴가 준비", "source": "Naver", "period": "7-8월 휴가철", "score": 74, "change": "+6%" }
+  ]
+}
